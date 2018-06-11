@@ -1,0 +1,198 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Admin VPC",
+    "Parameters": {
+        "azOne": {
+            "Description": "The AZ for the first subnet",
+            "Type": "String"
+        },
+        "azTwo": {
+            "Description": "The AZ for the first subnet",
+            "Type": "String"
+        },
+        "IGWname": {
+            "Description": "The name of the internet gateway",
+            "Type": "String"
+        },
+        "routeTableName": {
+            "Description": "The name of the default route table",
+            "Type": "String"
+        },
+        "subnetCIDROne": {
+            "Description": "The CIDR block for subnet in first AZ",
+            "Type": "String"
+        },
+        "subnetCIDRTwo": {
+            "Description": "The CIDR block for subnet in second AZ",
+            "Type": "String"
+        },
+        "theCIDR": {
+            "Description": "The CIDR block of the admin VPC",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "adminVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Metadata": {
+                "Comment": "Wait a second! I thought I could not comment in JSON...."
+            },
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "theCIDR"
+                },
+                "EnableDnsHostnames": "false",
+                "EnableDnsSupport": "true"
+            }
+        },
+        "theInternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+            "Properties" : {
+            "Tags" : [ {"Key" : "Name", "Value" : {"Ref": "IGWname"}}]
+            }
+        },
+        "vpcIgwAssociation" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "DependsOn": [
+                "adminVPC",
+                "theInternetGateway"
+            ],
+            "Properties" : {
+                "VpcId" : { "Ref" : "adminVPC" },
+                "InternetGatewayId" : { "Ref" : "theInternetGateway" }
+            }
+        },
+        "adminRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "adminVPC" },
+                "Tags" : [
+                    { "Key" : "Name", "Value" : {"Ref": "routeTableName"} }
+                ]
+            }
+        },
+        "routeToUncleAlsInternet": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "vpcIgwAssociation",
+            "Properties": {
+                "RouteTableId": { "Ref": "adminRouteTable" },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "theInternetGateway"
+                }
+            }
+        },
+        "adminSubnetOne": {
+            "Type": "AWS::EC2::Subnet",
+            "DependsOn": "adminVPC",
+            "Properties": {
+                "AvailabilityZone": {"Ref": "azOne"},
+                "CidrBlock": {"Ref": "subnetCIDROne"},
+                "MapPublicIpOnLaunch": "false",
+                "VpcId": {
+                    "Ref": "adminVPC"
+                }
+            }
+        },
+        "adminSubnetTwo": {
+            "Type": "AWS::EC2::Subnet",
+            "DependsOn": "adminVPC",
+            "Properties": {
+                "AvailabilityZone": {"Ref": "azTwo"},
+                "CidrBlock": {"Ref": "subnetCIDRTwo"},
+                "MapPublicIpOnLaunch": "false",
+                "VpcId": {
+                    "Ref": "adminVPC"
+                }
+            }
+        },
+        "subnetOneRoute": {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "DependsOn": [
+                "adminRouteTable",
+                "adminSubnetOne"
+            ],
+            "Properties" : {
+                "RouteTableId" : {"Ref": "adminRouteTable"},
+                "SubnetId" : {"Ref": "adminSubnetOne"}
+            }
+        },
+        "subnetTwoRoute": {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "DependsOn": [
+                "adminRouteTable",
+                "adminSubnetTwo"
+            ],
+            "Properties" : {
+                "RouteTableId" : {"Ref": "adminRouteTable"},
+                "SubnetId" : {"Ref": "adminSubnetTwo"}
+            }
+        },
+        "adminSshSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow ssh connections",
+                "GroupName" : "admin-ssh",
+                "VpcId" : {"Ref" : "adminVPC"},
+                "SecurityGroupIngress" : [{
+                    "IpProtocol" : "tcp",
+                    "FromPort" : "22",
+                    "ToPort" : "22",
+                    "CidrIp" : "0.0.0.0/0"
+                }],
+                "SecurityGroupEgress" : [{
+                    "IpProtocol" : "tcp",
+                    "FromPort" : "1",
+                    "ToPort" : "65535",
+                    "CidrIp" : "0.0.0.0/0"
+                }]
+            }
+        },
+        "adminSshSecurityGroupIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "adminSshSecurityGroup"
+                },
+                "IpProtocol": "-1",
+                "FromPort": "-1",
+                "ToPort": "-1",
+                "SourceSecurityGroupId": {
+                    "Ref": "adminSshSecurityGroup"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "adminVPC": {
+            "Description": "The admin VPC",
+            "Value": {"Ref": "adminVPC"},
+            "Export": {"Name": "adminVPCV1"}
+        },
+        "adminSshSecurityGroup": {
+            "Description": "The admin SG that allows ssh inbound",
+            "Value": {"Ref": "adminSshSecurityGroup"},
+            "Export": {"Name": "adminSshSecurityGroupV1"}
+        },
+        "adminSubnetOne": {
+            "Description": "The first admin subnet",
+            "Value": {"Ref": "adminSubnetOne"},
+            "Export": {"Name": "adminSubnetOneV1"}
+        },
+        "adminSubnetTwo": {
+            "Description": "The second admin subnet",
+            "Value": {"Ref": "adminSubnetTwo"},
+            "Export": {"Name": "adminSubnetTwoV1"}
+        },
+        "adminRouteTable": {
+            "Description": "The route table for the public subnets of the admin VPC",
+            "Value": {"Ref": "adminRouteTable"},
+            "Export": {"Name": "adminRouteTableV1"}
+        },
+        "adminVPCCidr": {
+            "Description": "The VPC CIDR block for admin VPC",
+            "Value": {"Ref": "theCIDR"},
+            "Export": {"Name": "adminVPCCidrV1"}
+        }
+    }
+}

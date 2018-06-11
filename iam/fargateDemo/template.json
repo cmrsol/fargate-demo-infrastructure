@@ -1,0 +1,144 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "IAM Role for the Fargate Demo project",
+    "Parameters": {
+        "managedPolicies": {
+            "Description": "List of managed policies",
+            "Type": "CommaDelimitedList"
+        },
+        "roleName": {
+            "Description": "The name of the role",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "fargateDemoRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [ "sts:AssumeRole" ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {"Fn::Join": ["",
+                                            [
+                                                "arn:aws:iam::",
+                                                { "Ref": "AWS::AccountId" },
+                                                ":root"
+                                            ]
+                                        ]},
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    "ecs-tasks.amazonaws.com",
+                                    "events.amazonaws.com",
+                                    "apigateway.amazonaws.com",
+                                    "application-autoscaling.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "ManagedPolicyArns": { "Ref": "managedPolicies" },
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [ "sts:AssumeRole" ],
+                                    "Effect": "Allow",
+                                    "Resource": [
+                                        {"Fn::Join": ["",
+                                            [
+                                                "arn:aws:iam::",
+                                                {"Ref": "AWS::AccountId"},
+                                                ":role/",
+                                                {"Ref": "roleName"}
+                                            ]
+                                        ]},
+                                        {"Fn::Join": ["",
+                                            [
+                                                "arn:aws:sts::",
+                                                {"Ref": "AWS::AccountId"},
+                                                ":assumed-role/",
+                                                {"Ref": "roleName"},
+                                                "/assumeOwnRole"
+                                            ]
+                                        ]}
+                                    ]
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        },
+                        "PolicyName": "assume-self"
+                    },
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ssm:DescribeParameters",
+                                        "ssm:GetParameterHistory",
+                                        "ssm:GetParametersByPath",
+                                        "ssm:GetParameters",
+                                        "ssm:GetParameter"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        },
+                        "PolicyName": "ssm-get-perms"
+                    },
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "application-autoscaling:*",
+                                        "cloudwatch:DescribeAlarms",
+                                        "cloudwatch:PutMetricAlarm",
+                                        "ecs:DescribeServices",
+                                        "ecs:UpdateService"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        },
+                        "PolicyName": "service-autoscaling"
+                    }
+                ],
+                "RoleName": {"Ref": "roleName"}
+            }
+        },
+        "fargateDemoEC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "DependsOn": "fargateDemoRole",
+            "Properties": {
+                "Roles": [ {"Ref": "fargateDemoRole"} ],
+                "InstanceProfileName": {"Ref": "roleName"}
+            }
+        }
+    },
+    "Outputs": {
+        "fargateDemoRole": {
+            "Description": "The Fargate Demo project role",
+            "Value": { "Ref": "fargateDemoRole" },
+            "Export": { "Name": "fargateDemoRoleV1" }
+        },
+        "fargateDemoRoleArn": {
+            "Description": "The Fargate Demo project role ARN",
+            "Value": { "Fn::GetAtt": [ "fargateDemoRole", "Arn" ] },
+            "Export": { "Name": "fargateDemoRoleArnV1" }
+        },
+        "fargateDemoEC2InstanceProfile": {
+            "Description": "The Fargate Demo instance profile",
+            "Value": { "Ref": "fargateDemoEC2InstanceProfile" },
+            "Export": { "Name": "fargateDemoEC2InstanceProfileV1" }
+        }
+    }
+}
